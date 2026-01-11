@@ -1,110 +1,101 @@
-
-// 1. Elemek kinyerése a HTML-ből
-const uploadInput = document.getElementById('upload');
-const canvas = document.getElementById('canvas');
+// A HTML elemek elérése azonosító alapján
+const imageLoader = document.getElementById('imageLoader');
+const canvas = document.getElementById('imageCanvas');
 const ctx = canvas.getContext('2d');
-const placeholder = document.getElementById('placeholder');
-const sliderControls = document.getElementById('slider-controls');
-
-const brightnessSlider = document.getElementById('brightness');
-const contrastSlider = document.getElementById('contrast');
-const saturationSlider = document.getElementById('saturation');
-const blurSlider = document.getElementById('blur');
-const sepiaSlider = document.getElementById('sepia');
-const grayscaleSlider = document.getElementById('grayscale');
-
-const resetButton = document.getElementById('resetButton');
 const downloadButton = document.getElementById('downloadButton');
 
-// Globális változó az eredeti kép tárolására
-let originalImage = null;
+// A szűrő csúszkák elérése
+const contrastSlider = document.getElementById('contrast');
+const saturateSlider = document.getElementById('saturate');
+const blurSlider = document.getElementById('blur');
+const brightnessSlider = document.getElementById('brightness');
 
-// 2. Eseményfigyelők
-uploadInput.addEventListener('change', handleImageUpload);
-brightnessSlider.addEventListener('input', applyFilters);
-contrastSlider.addEventListener('input', applyFilters);
-saturationSlider.addEventListener('input', applyFilters);
-blurSlider.addEventListener('input', applyFilters);
-sepiaSlider.addEventListener('input', applyFilters);
-grayscaleSlider.addEventListener('input', applyFilters);
-resetButton.addEventListener('click', resetImage);
-downloadButton.addEventListener('click', downloadImage);
+// Egy globális változó a kép tárolására, hogy ne kelljen újra betölteni
+let currentImage = null;
 
-
-// 3. Fő funkciók
-
-function handleImageUpload(e) {
+// Eseményfigyelő a fájlválasztóra
+imageLoader.addEventListener('change', (e) => {
     const file = e.target.files[0];
-    if (!file) return;
+    if (!file) {
+        return; // Nincs fájl, nincs teendő
+    }
 
     const reader = new FileReader();
-    
-    reader.onload = function(event) {
-        originalImage = new Image();
-        originalImage.onload = function() {
-            canvas.width = originalImage.width;
-            canvas.height = originalImage.height;
+
+    // Amikor a fájl beolvasása befejeződött
+    reader.onload = (event) => {
+        const img = new Image();
+        
+        // Amikor a képfájl betöltődött a memóriába
+        img.onload = () => {
+            // Beállítjuk a vászon méretét a kép méretére
+            canvas.width = img.width;
+            canvas.height = img.height;
             
-            placeholder.classList.add('hidden');
-            canvas.classList.remove('hidden');
-            sliderControls.classList.remove('hidden');
-
-            console.log("Kép sikeresen betöltve."); // Hibakereső üzenet
-            resetImage();
-        }
-        originalImage.src = event.target.result;
-    }
+            // Elmentjük a képet a globális változóba
+            currentImage = img;
+            
+            // Alkalmazzuk az alapértelmezett szűrőket és kirajzoljuk a képet
+            applyFilters();
+        };
+        // Beállítjuk a kép forrását a beolvasott adat URL-re
+        img.src = event.target.result;
+    };
     
+    // Elindítjuk a fájl beolvasását
     reader.readAsDataURL(file);
-}
+});
 
+// Egy eseményfigyelőt adunk az összes csúszkához
+// ('input' eseményre figyel, ami valós időben frissül húzás közben)
+[contrastSlider, saturateSlider, blurSlider, brightnessSlider].forEach(slider => {
+    slider.addEventListener('input', applyFilters);
+});
+
+/**
+ * Ez a fő függvény, ami alkalmazza a szűrőket.
+ * Bármelyik csúszka megmozdul, ez a függvény lefut.
+ */
 function applyFilters() {
-    if (!originalImage) {
-        console.log("Hiba: Nincs kép, amire szűrőt lehetne alkalmazni.");
-        return;
+    if (!currentImage) {
+        return; // Ha még nincs kép betöltve, ne csináljon semmit
     }
 
-    // === HIBAKERESŐ ÜZENET ===
-    // Ennek az üzenetnek minden csúszka-mozdításnál meg kell jelennie
-    console.log("applyFilters() lefutott. Fényerő:", brightnessSlider.value);
+    // Kiolvassuk az értékeket a csúszkákból
+    const contrast = contrastSlider.value;
+    const saturate = saturateSlider.value;
+    const blur = blurSlider.value;
+    const brightness = brightnessSlider.value;
 
-    // Összeállítjuk a CSS filter string-et
-    const brightness = `brightness(${brightnessSlider.value}%)`;
-    const contrast = `contrast(${contrastSlider.value}%)`;
-    const saturation = `saturate(${saturationSlider.value}%)`;
-    const blur = `blur(${blurSlider.value}px)`;
-    const sepia = `sepia(${sepiaSlider.value}%)`;
-    const grayscale = `grayscale(${grayscaleSlider.value}%)`;
+    // Összeállítjuk a CSS filter stringet
+    // Ez a string mondja meg a vászonnak, milyen szűrőket használjon
+    const filterString = 
+        `contrast(${contrast}%) ` +
+        `saturate(${saturate}%) ` +
+        `blur(${blur}px) ` +
+        `brightness(${brightness}%)`;
 
-    // Töröljük a vásznat
+    // Alkalmazzuk a szűrőket a vászon "kontextusára"
+    ctx.filter = filterString;
+
+    // Töröljük a vásznat (ha esetleg volt rajta előző kép)
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Alkalmazzuk a szűrőket a vászon kontextusára
-    ctx.filter = `${brightness} ${contrast} ${saturation} ${blur} ${sepia} ${grayscale}`;
+    // Rárajzoljuk a képet a vászonra az aktuális szűrőbeállításokkal
+    ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+}
+
+// Eseményfigyelő a letöltés gombra
+downloadButton.addEventListener('click', () => {
+    // Létrehozunk egy "link" elemet a memóriában
+    const link = document.createElement('a');
     
-    // Újrarajzoljuk a képet a szűrőkkel
-    ctx.drawImage(originalImage, 0, 0);
-}
-
-function resetImage() {
-    if (!originalImage) return;
-
-    // Csúszkák visszaállítása
-    brightnessSlider.value = 100;
-    contrastSlider.value = 100;
-    saturationSlider.value = 100;
-    blurSlider.value = 0;
-    sepiaSlider.value = 0;
-    grayscaleSlider.value = 0;
-
-    // Szűrők törlése és kép újrarajzolása
-    ctx.filter = 'none';
-    ctx.drawImage(originalImage, 0, 0);
-    console.log("Kép visszaállítva az eredetire."); // Hibakereső üzenet
-}
-
-function downloadImage() {
-    if (!originalImage) return;
-    const dataUrl = canvas.toDataURL('image/png');
-    downloadButton.href = dataUrl;
-}
+    // Beállítjuk a letöltendő fájl nevét
+    link.download = 'elesitett-kep.png';
+    
+    // A link "címe" maga a vászon tartalma lesz, PNG képként
+    link.href = canvas.toDataURL('image/png');
+    
+    // "Rákattintunk" a linkre a kódból, ami elindítja a letöltést
+    link.click();
+});
